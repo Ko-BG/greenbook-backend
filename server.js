@@ -2,105 +2,84 @@ import express from "express";
 import cors from "cors";
 import multer from "multer";
 import fs from "fs";
+import path from "path";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.static("uploads"));
 
-// --- Multer setup for file uploads ---
-const UPLOAD_DIR = "uploads";
+// Create uploads folder if not exists
+const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
 
+// Multer setup
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, UPLOAD_DIR);
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + "-" + file.originalname);
-  }
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+  filename: (req, file, cb) =>
+    cb(null, Date.now() + "-" + file.originalname)
 });
-
 const upload = multer({ storage });
 
-// --- In-memory storage ---
-let users = {};        // {id: {name, pass, role}}
-let assignments = [];  // {title, uploadedFiles: []}
-let exams = [];        // {title, questions: []}
-let submissions = [];  // {userId, type, score, file}
-let classFeed = [];    // {userId, message}
+// Data storage (simple JSON files)
+const USERS_FILE = "./data/users.json";
+const ASSIGNMENTS_FILE = "./data/assignments.json";
+const EXAMS_FILE = "./data/exams.json";
+const CLASSFEED_FILE = "./data/classfeed.json";
 
-// --- Routes ---
+// Ensure data folder
+if (!fs.existsSync("./data")) fs.mkdirSync("./data");
 
-// Health check
-app.get("/", (req, res) => {
-  res.send("GreenBook Backend Running ✅");
+// Helper to read/write JSON
+const readJSON = (file) => {
+  if (!fs.existsSync(file)) fs.writeFileSync(file, "[]");
+  return JSON.parse(fs.readFileSync(file));
+};
+const writeJSON = (file, data) => fs.writeFileSync(file, JSON.stringify(data, null, 2));
+
+// ======== API ========
+
+// Users
+app.get("/users", (req, res) => res.json(readJSON(USERS_FILE)));
+app.post("/users", (req, res) => {
+  const users = readJSON(USERS_FILE);
+  users.push(req.body);
+  writeJSON(USERS_FILE, users);
+  res.json({ status: "success" });
 });
 
-// Sign up
-app.post("/signup", (req, res) => {
-  const { id, name, pass, role } = req.body;
-  if (!id || !name || !pass || !role) return res.status(400).json({ error: "Missing fields" });
-  if (users[id]) return res.status(400).json({ error: "User exists" });
-  users[id] = { name, pass, role };
-  res.json({ message: "Signup success" });
-});
-
-// Login
-app.post("/login", (req, res) => {
-  const { id, pass, role } = req.body;
-  const user = users[id];
-  if (!user || user.pass !== pass || user.role !== role) return res.status(400).json({ error: "Invalid credentials" });
-  res.json({ message: "Login success", user: { id, name: user.name, role: user.role } });
-});
-
-// Get assignments
-app.get("/assignments", (req, res) => res.json(assignments));
-
-// Create assignment
+// Assignments
+app.get("/assignments", (req, res) => res.json(readJSON(ASSIGNMENTS_FILE)));
 app.post("/assignments", (req, res) => {
-  const { title } = req.body;
-  if (!title) return res.status(400).json({ error: "Title required" });
-  const newAssignment = { title, uploadedFiles: [] };
-  assignments.push(newAssignment);
-  res.json({ message: "Assignment created", assignment: newAssignment });
-});
-
-// Submit assignment (file upload)
-app.post("/submit-assignment", upload.single("file"), (req, res) => {
-  const { userId } = req.body;
-  if (!req.file || !userId) return res.status(400).json({ error: "File and userId required" });
-  submissions.push({ userId, type: "assignment", file: req.file.filename });
-  res.json({ message: "Assignment submitted", file: req.file.filename });
+  const assignments = readJSON(ASSIGNMENTS_FILE);
+  assignments.push(req.body);
+  writeJSON(ASSIGNMENTS_FILE, assignments);
+  res.json({ status: "success" });
 });
 
 // Exams
-app.get("/exams", (req, res) => res.json(exams));
+app.get("/exams", (req, res) => res.json(readJSON(EXAMS_FILE)));
 app.post("/exams", (req, res) => {
-  const { title, questions } = req.body;
-  if (!title || !questions) return res.status(400).json({ error: "Missing fields" });
-  exams.push({ title, questions });
-  res.json({ message: "Exam posted", exam: { title, questions } });
-});
-
-// Submit exam score
-app.post("/submit-exam", (req, res) => {
-  const { userId, score } = req.body;
-  if (!userId || score == null) return res.status(400).json({ error: "Missing fields" });
-  submissions.push({ userId, type: "exam", score });
-  res.json({ message: "Exam submitted", score });
+  const exams = readJSON(EXAMS_FILE);
+  exams.push(req.body);
+  writeJSON(EXAMS_FILE, exams);
+  res.json({ status: "success" });
 });
 
 // Class feed
-app.get("/class-feed", (req, res) => res.json(classFeed));
-app.post("/class-feed", (req, res) => {
-  const { userId, message } = req.body;
-  if (!userId || !message) return res.status(400).json({ error: "Missing fields" });
-  classFeed.push({ userId, message });
-  res.json({ message: "Message posted", entry: { userId, message } });
+app.get("/feed", (req, res) => res.json(readJSON(CLASSFEED_FILE)));
+app.post("/feed", (req, res) => {
+  const feed = readJSON(CLASSFEED_FILE);
+  feed.push(req.body);
+  writeJSON(CLASSFEED_FILE, feed);
+  res.json({ status: "success" });
 });
 
-// Start server
-app.listen(PORT, () => console.log(`GreenBook backend running on port ${PORT}`));
+// Upload file
+app.post("/upload", upload.single("file"), (req, res) => {
+  res.json({ status: "success", file: req.file.filename });
+});
+
+// Server start
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
