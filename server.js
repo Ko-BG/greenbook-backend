@@ -1,58 +1,114 @@
-// server.js
 import express from "express";
 import cors from "cors";
-import bodyParser from "body-parser";
-import bcrypt from "bcrypt";
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+app.use(cors());
+app.use(express.json());
 
-// ✅ Middleware
-app.use(cors({ origin: true })); // allow all origins
-app.use(bodyParser.json());
+const PORT = process.env.PORT || 3000;
 
-// ✅ In-memory user storage (replace with DB in production)
+/* ---------------- DATA STORES (in-memory) ---------------- */
 let users = [];
+let assignments = [];
+let exams = [];
+let feed = [];
+let results = [];
+let library = ["Math eBook", "Science Kit", "History Notes"];
+let onlineUsers = {};
 
-// 🔹 Signup route
-app.post("/api/signup", async (req, res) => {
+/* ---------------- STATUS ---------------- */
+app.get("/", (req, res) => {
+  res.send("✅ GreenBook Backend is running");
+});
+
+app.get("/api/status", (req, res) => {
+  res.json({
+    status: "online",
+    users: Object.keys(onlineUsers).length
+  });
+});
+
+/* ---------------- AUTH ---------------- */
+app.post("/api/signup", (req, res) => {
   const { id, name, pass, role } = req.body;
-
   if (!id || !name || !pass || !role) {
-    return res.json({ error: "All fields required" });
+    return res.json({ error: "Missing fields" });
   }
 
-  const exists = users.find(u => u.id === id);
-  if (exists) return res.json({ error: "ID already exists" });
+  if (users.find(u => u.id === id)) {
+    return res.json({ error: "User already exists" });
+  }
 
-  const hash = await bcrypt.hash(pass, 10);
-  const user = { id, name, role, pass: hash };
-  users.push(user);
-
+  users.push({ id, name, pass, role });
   res.json({ message: "Signup successful" });
 });
 
-// 🔹 Login route
-app.post("/api/login", async (req, res) => {
+app.post("/api/login", (req, res) => {
   const { id, pass } = req.body;
+  const user = users.find(u => u.id === id && u.pass === pass);
+  if (!user) return res.json({ error: "Invalid login" });
 
-  if (!id || !pass) return res.json({ error: "ID and password required" });
-
-  const user = users.find(u => u.id === id);
-  if (!user) return res.json({ error: "User not found" });
-
-  const valid = await bcrypt.compare(pass, user.pass);
-  if (!valid) return res.json({ error: "Incorrect password" });
-
-  res.json({ user: { id: user.id, name: user.name, role: user.role } });
+  onlineUsers[id] = user;
+  res.json({ user });
 });
 
-// 🔹 Default route to avoid "Cannot GET /"
-app.get("/", (req, res) => {
-  res.send("✅ GreenBook Backend is running. Use /api/signup and /api/login");
+app.post("/api/logout", (req, res) => {
+  const { id } = req.body;
+  delete onlineUsers[id];
+  res.json({ message: "Logged out" });
 });
 
-// 🔹 Start server
+/* ---------------- ASSIGNMENTS ---------------- */
+app.post("/api/assignment", (req, res) => {
+  assignments.push(req.body);
+  res.json({ ok: true });
+});
+
+app.get("/api/assignments", (req, res) => {
+  res.json(assignments);
+});
+
+/* ---------------- EXAMS ---------------- */
+app.post("/api/exam", (req, res) => {
+  exams.push(req.body);
+  res.json({ ok: true });
+});
+
+app.get("/api/exams", (req, res) => {
+  res.json(exams);
+});
+
+app.post("/api/takeExam", (req, res) => {
+  const score = Math.floor(Math.random() * 40) + 60;
+  results.push({ student: req.body.student, score });
+  res.json({ score });
+});
+
+app.get("/api/results", (req, res) => {
+  res.json(results);
+});
+
+/* ---------------- FEED ---------------- */
+app.post("/api/feed", (req, res) => {
+  feed.unshift(req.body);
+  res.json({ ok: true });
+});
+
+app.get("/api/feed", (req, res) => {
+  res.json(feed.slice(0, 50));
+});
+
+/* ---------------- LIBRARY ---------------- */
+app.post("/api/buy", (req, res) => {
+  library.push("New Digital Resource " + Date.now());
+  res.json({ ok: true });
+});
+
+app.get("/api/library", (req, res) => {
+  res.json(library);
+});
+
+/* ---------------- START SERVER ---------------- */
 app.listen(PORT, () => {
-  console.log(`GreenBook backend running on port ${PORT}`);
+  console.log("🚀 GreenBook Backend running on port " + PORT);
 });
