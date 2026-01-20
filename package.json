@@ -1,7 +1,7 @@
 {
   "name": "greenbook-backend",
   "version": "1.0.0",
-  "description": "Backend for GreenBook OS with file uploads",
+  "description": "Backend for GreenBook OS",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
