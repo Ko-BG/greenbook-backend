@@ -1,45 +1,41 @@
-const express = require('express');
-const path = require('path');
-const multer = require('multer');
-const fs = require('fs');
+const express = require("express");
+const path = require("path");
+const multer = require("multer");
+const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Create uploads folder if not exists
-const uploadDir = path.join(__dirname, 'uploads');
+// Ensure uploads folder exists
+const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-// Multer setup for file uploads
+// Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname),
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    cb(null, `${timestamp}-${file.originalname}`);
+  }
 });
 const upload = multer({ storage });
 
-// Middleware
+// Serve static files from public/
+app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static files (CSS, JS if any separate, index.html)
-app.use(express.static(__dirname));
-
-// Home route
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+// Serve index.html for the root
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// API: Upload assignment
-app.post('/upload-assignment', upload.array('files'), (req, res) => {
-  res.json({ message: 'Files uploaded successfully', files: req.files });
-});
-
-// Fallback for any other route
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+// API endpoint for file uploads (e.g., assignments)
+app.post("/upload", upload.array("files"), (req, res) => {
+  if (!req.files || req.files.length === 0) return res.status(400).json({ msg: "No files uploaded" });
+  const uploadedFiles = req.files.map(f => f.filename);
+  res.json({ msg: "Files uploaded successfully", files: uploadedFiles });
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`GreenBook backend running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`GreenBook backend running on port ${PORT}`));
