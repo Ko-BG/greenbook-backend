@@ -1,97 +1,73 @@
-// server.js
 const express = require("express");
-const cors = require("cors");
-const multer = require("multer");
-
+const path = require("path");
 const app = express();
-const PORT = process.env.PORT || 5000;
 
-// Storage for uploaded assignments
-const upload = multer({ dest: "uploads/" });
-
-app.use(cors());
+// Middleware
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, "public")));
 
-// --------- IN-MEMORY DATABASES ---------
-let users = [];        // {name,id,pass,role}
-let feed = [];         // {user,text}
-let assignments = [];  // {title, fileName?}
-let exams = [];        // {title, questions:[], grades: [{student,grade}]}
-let ipPosts = [];      // {user,text}
-let parentComments = []; // {parent,text}
+// In-memory "database" (replace with real DB later)
+let users = [];
+let assignments = [];
+let exams = [];
+let submissions = [];
+let classFeed = [];
+let library = [];
 
-// --------- USERS ---------
-app.post("/users", (req,res)=>{
-    const {name,id,pass,role} = req.body;
-    if(!name || !id || !pass || !role) return res.status(400).send({error:"Missing fields"});
-    if(users.find(u=>u.id===id)) return res.status(400).send({error:"ID exists"});
-    users.push({name,id,pass,role});
-    res.send({success:true});
+// Routes
+
+// Users
+app.get("/api/users", (req, res) => res.json(users));
+app.post("/api/users", (req, res) => {
+  const { name, id, pass, role } = req.body;
+  if (!name || !id || !pass || !role) return res.status(400).json({ error: "Missing fields" });
+  if (users.find(u => u.id === id)) return res.status(400).json({ error: "User exists" });
+  users.push({ name, id, pass, role });
+  res.json({ message: "User created" });
 });
 
-app.get("/users",(req,res)=>{
-    res.send(users);
+// Assignments
+app.get("/api/assignments", (req, res) => res.json(assignments));
+app.post("/api/assignments", (req, res) => {
+  const { title } = req.body;
+  if (!title) return res.status(400).json({ error: "Missing title" });
+  assignments.push({ title });
+  res.json({ message: "Assignment posted" });
 });
 
-// --------- FEED ---------
-app.get("/feed",(req,res)=>res.send(feed));
-app.post("/feed",(req,res)=>{
-    const {user,text} = req.body;
-    if(!user || !text) return res.status(400).send({error:"Missing"});
-    feed.push({user,text});
-    res.send({success:true});
+// Exams
+app.get("/api/exams", (req, res) => res.json(exams));
+app.post("/api/exams", (req, res) => {
+  const { title } = req.body;
+  if (!title) return res.status(400).json({ error: "Missing title" });
+  exams.push({ title });
+  res.json({ message: "Exam posted" });
 });
 
-// --------- ASSIGNMENTS ---------
-app.get("/assignments",(req,res)=>res.send(assignments));
-app.post("/assignments",(req,res)=>{
-    const {title} = req.body;
-    if(!title) return res.status(400).send({error:"Missing title"});
-    assignments.push({title});
-    res.send({success:true});
+// Class feed
+app.get("/api/feed", (req, res) => res.json(classFeed));
+app.post("/api/feed", (req, res) => {
+  const { user, text } = req.body;
+  if (!user || !text) return res.status(400).json({ error: "Missing data" });
+  classFeed.push({ user, text });
+  res.json({ message: "Message posted" });
 });
 
-// File upload for assignments
-app.post("/upload", upload.single("file"), (req,res)=>{
-    if(!req.file) return res.status(400).send({error:"No file"});
-    assignments.push({title:req.file.originalname, fileName:req.file.filename});
-    res.send({success:true});
+// Library / Wallet
+app.get("/api/library", (req, res) => res.json(library));
+app.post("/api/library", (req, res) => {
+  const { resource } = req.body;
+  if (!resource) return res.status(400).json({ error: "Missing resource" });
+  library.push(resource);
+  res.json({ message: "Resource added" });
 });
 
-// --------- EXAMS ---------
-app.get("/exams",(req,res)=>res.send(exams));
-app.post("/exams",(req,res)=>{
-    const {title,questions} = req.body;
-    if(!title || !questions) return res.status(400).send({error:"Missing"});
-    exams.push({title,questions,grades:[]});
-    res.send({success:true});
+// Serve index.html for all other routes
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-app.post("/grade",(req,res)=>{
-    const {examTitle,student,grade} = req.body;
-    let exam = exams.find(e=>e.title===examTitle);
-    if(!exam) return res.status(404).send({error:"Exam not found"});
-    exam.grades.push({student,grade});
-    res.send({success:true});
-});
-
-// --------- INFLUENSA ---------
-app.get("/ipPosts",(req,res)=>res.send(ipPosts));
-app.post("/ipPosts",(req,res)=>{
-    const {user,text} = req.body;
-    if(!user || !text) return res.status(400).send({error:"Missing"});
-    ipPosts.push({user,text});
-    res.send({success:true});
-});
-
-// --------- PARENT COMMENTS ---------
-app.get("/parentComments",(req,res)=>res.send(parentComments));
-app.post("/parentComments",(req,res)=>{
-    const {parent,text} = req.body;
-    if(!parent || !text) return res.status(400).send({error:"Missing"});
-    parentComments.push({parent,text});
-    res.send({success:true});
-});
-
-// --------- START SERVER ---------
-app.listen(PORT, ()=>console.log(`GreenBook backend live on port ${PORT}`));
+// Start server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`GreenBook backend running on port ${PORT}`));
