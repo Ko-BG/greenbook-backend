@@ -1,37 +1,36 @@
-const express = require("express");
-const path = require("path");
-const multer = require("multer");
-const fs = require("fs");
+import express from "express";
+import cors from "cors";
+import bodyParser from "body-parser";
+import bcrypt from "bcrypt";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 
-// Ensure uploads folder exists
-const uploadsDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
+app.use(cors({ origin: true }));
+app.use(bodyParser.json());
 
-// Middleware for JSON parsing
-app.use(express.json());
+// In-memory users (replace with DB for production)
+let users = [];
 
-// Multer setup for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + "-" + file.originalname);
-  },
-});
-const upload = multer({ storage });
-
-// Upload endpoint
-app.post("/api/upload", upload.single("file"), (req, res) => {
-  res.json({ filename: req.file.filename });
+// Signup
+app.post("/api/signup", async (req, res) => {
+  const { id, name, pass, role } = req.body;
+  if (!id || !name || !pass || !role) return res.json({ error: "All fields required" });
+  if (users.find(u => u.id === id)) return res.json({ error: "ID already exists" });
+  const hash = await bcrypt.hash(pass, 10);
+  const user = { id, name, role, pass: hash };
+  users.push(user);
+  res.json({ message: "Signup successful" });
 });
 
-// Serve index.html for all routes
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
+// Login
+app.post("/api/login", async (req, res) => {
+  const { id, pass } = req.body;
+  const user = users.find(u => u.id === id);
+  if (!user) return res.json({ error: "User not found" });
+  const valid = await bcrypt.compare(pass, user.pass);
+  if (!valid) return res.json({ error: "Incorrect password" });
+  res.json({ user: { id: user.id, name: user.name, role: user.role } });
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
